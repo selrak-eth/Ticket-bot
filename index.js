@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, EmbedBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, EmbedBuilder, ButtonStyle, PermissionsBitField, ChannelType, } = require('discord.js');
 const client = new Client({ intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -6,6 +6,7 @@ const client = new Client({ intents: [
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildMembers
 ] });
+
 
 
 
@@ -26,13 +27,13 @@ const botLogsChannel =(process.env.BOT_STATUS_CHANNEL);
 const startTicketChannel = (process.env.START_TICKET_CHANNEL);
 
 // Categories of channels
-const openTicketsCategory = (process.env.OPEN_TICKETS_CATEGORY);
+const openTicketsCategory = (process.env.OPEN_TICKET_CATEGORY);
 const archivesCategory = (process.env.ARCHIVES_CATEGORY);
 
 
 
 // tickets var
-const cooldownWriteTicket = 2; // in minutes
+const cooldownWriteTicket = 2 * 60000; // in minutes
 const checkInterval = 10 * 1000;
 let cooldownTicketSuggestions = [];
 let cooldownTicketBugs = [];
@@ -127,31 +128,62 @@ async function checkMessagesAndSendEmbed() {
     }
 }
 
-// Handle button interactions
+// Handle button interactions and slash commands
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
+    if (interaction.isButton()) {
+        let replyMessage = '';
 
-    switch (interaction.customId) {
-        case 'suggestions':
-            console.log('Suggestions button clicked');
-            await createTicket(interaction.user, 'suggestions');
-            break;
-        case 'bug':
-            console.log('Bug button clicked');
-            await createTicket(interaction.user, 'bug');
-            break;
-        case 'complaints':
-            console.log('Complaints button clicked');
-            await createTicket(interaction.user, 'complaints');
-            break;
-        default:
-            console.log('Unknown button clicked');
-            break;
+        switch (interaction.customId) {
+            case 'suggestions':
+                console.log('Suggestions button clicked');
+                if (await createTicket(interaction.user, 'suggestions')) {
+                    replyMessage = 'Your suggestion ticket has been created successfully!';
+                } else {
+                    replyMessage = 'You are on cooldown to create suggestion tickets. \n*Please wait two minutes after sending a ticket.*';
+                }
+                break;
+            case 'bug':
+                console.log('Bug button clicked');
+                if (await createTicket(interaction.user, 'bug')) {
+                    replyMessage = 'Your bug report ticket has been created successfully!';
+                } else {
+                    replyMessage = 'You are on cooldown to create bug report tickets. \n*Please wait two minutes after sending a ticket.*';
+                }
+                break;
+            case 'complaints':
+                console.log('Complaints button clicked');
+                if (await createTicket(interaction.user, 'complaints')) {
+                    replyMessage = 'Your complaint ticket has been created successfully!';
+                } else {
+                    replyMessage = 'You are on cooldown to create complaint tickets. \n*Please wait two minutes after sending a ticket.*';
+                }
+                break;
+            default:
+                console.log('Unknown button clicked');
+                replyMessage = 'Unknown button clicked.';
+                break;
+        }
+
+        await interaction.reply({ content: replyMessage, ephemeral: true });
+    } else if (interaction.isCommand()) {
+        if (interaction.commandName === 'archive') {
+            // Archive the ticket channel
+            const channel = interaction.channel;
+            if (channel.parentId !== openTicketsCategory || channel.id === startTicketChannel) {
+                await interaction.reply({ content: 'This command can only be used in a ticket channel.', ephemeral: true });
+                return;
+            }
+
+            try {
+                await channel.setParent(archivesCategory);
+                await interaction.reply({ content: 'This ticket has been archived.', ephemeral: true });
+            } catch (error) {
+                console.error('Failed to archive ticket channel:', error);
+                await interaction.reply({ content: 'Failed to archive the ticket channel.', ephemeral: true });
+            }
+        }
     }
-
-    await interaction.reply({ content: 'Button clicked!', ephemeral: true });
 });
-
 
 // create a new ticket
 async function createTicket(user, ticketKind) {
@@ -180,11 +212,94 @@ async function createTicket(user, ticketKind) {
     // Add user to cooldown
     addUserToCooldown(user, ticketKind);
 
-    // Your ticket creation logic here
-    console.log(`Ticket created for ${ticketKind}`);
+    // Determine the emoji for the ticket kind
+    let emoji;
+    switch (ticketKind) {
+        case 'suggestions':
+            emoji = '💡';
+            break;
+        case 'bug':
+            emoji = '🤖';
+            break;
+        case 'complaints':
+            emoji = '🚧';
+            break;
+        default:
+            emoji = '';
+            break;
+    }
+
+    // Create the channel name
+    const channelName = `${emoji}-${user.tag}-${user.id}`;
+
+    try {
+        // Fetch the guild and create the channel
+        const guild = client.guilds.cache.get(process.env.GUILD_ID); // Replace with your guild ID
+        if (!guild) {
+            console.error('Guild not found');
+            return success;
+        }
+
+        const channel = await guild.channels.create({
+            name: channelName,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                {
+                    id: guild.roles.everyone.id,
+                    deny: [PermissionsBitField.Flags.ViewChannel],
+                },
+                {
+                    id: user.id,
+                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                },
+            ],
+        });
+
+        console.log(`Channel created: ${channelName}, moving to category: ${openTicketsCategory}`);
+
+        // Move the channel to the specified category
+        await channel.setParent(openTicketsCategory);
+
+        // Send a message in the channel
+        await channel.send(`Hi <@${user.id}>, your ticket has been created!`);
+
+        console.log(`Ticket channel created: ${channelName}`);
+        success = true;
+    } catch (error) {
+        console.error('Failed to create ticket channel:', error);
+    }
+
+    return success;
 }
 
+/*
+    COMMAND HANDLER
+*/
+// Register commands with Discord
+const { REST } = require('@discordjs/rest');
+const { Routes } = require('discord-api-types/v9');
 
+const commands = [
+    {
+        name: 'archive',
+        description: 'Archives ticket channel.',
+    }
+
+];
+
+// command initialitzation
+const rest = new REST({ version: '9' }).setToken(process.env.BOT_TOKEN);
+(async () => {
+    try {
+        console.log('Started refreshing application (/) commands.');
+        await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), {
+            body: commands,
+        });
+        console.log('Successfully reloaded application (/) commands.');
+    } catch (error) {
+        console.error(error);
+    }
+})();
 
 /*
     Base bot functions
