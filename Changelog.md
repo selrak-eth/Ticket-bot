@@ -17,15 +17,19 @@
         change on category swap to archive 💽
         Name variable on first parameter suggestion 💡, bug: '🤖', report: '🚧',
 
-# Backlog
+
+# Ticket bot 0.3:
 
     After ticket start:
-        Write a proper ticket use on new channel. Ping user.
         Send message to staff log saying someone started a ticket. ping staff.
+        Send message to staff when a channel has been archived
+        Write a proper ticket use on new channel. Ping user.
 
-    Channel names:
-        change on user replying staff 🛸
-        change on staff reply 📬
+# Backlog
+
+    Channel name change on use:
+        Add 🛸 on user first message
+        Add 📬 on staff reply 📬
     
 
 
