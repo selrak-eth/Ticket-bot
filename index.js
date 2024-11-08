@@ -20,6 +20,8 @@ client.login(process.env.BOT_TOKEN);
 // variables
 const goodbyechannelId =(process.env.BOT_STATUS_CHANNEL);
 
+
+
 async function sayHello() {
     const channel = client.channels.cache.get(goodbyechannelId);
     if (channel) {
