@@ -29,8 +29,13 @@
 
     Channel name change on use:
         Add 🛸 on user first message
-        Add 📬 on staff reply 📬
+
+    Forum for staff to accept responsability over tickets.
+        on each ticket start a new post and ping staff
+        add reactions, so staff can add themselves to the channel.
+        Add 📬 to channel name when staff is atributed to it
     
+
 
 
     
